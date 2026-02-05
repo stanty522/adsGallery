@@ -10,12 +10,12 @@ interface VideoPlayerProps {
 export default function VideoPlayer({ fileId, onClose }: VideoPlayerProps) {
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">
-      <iframe
+      <video
         src={getDriveEmbedUrl(fileId)}
-        className="w-full h-full"
-        allow="autoplay; encrypted-media"
-        allowFullScreen
-        frameBorder="0"
+        className="w-full h-full object-contain"
+        autoPlay
+        controls
+        playsInline
       />
       <button
         onClick={(e) => { e.stopPropagation(); onClose(); }}

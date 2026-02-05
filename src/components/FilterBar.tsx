@@ -9,6 +9,7 @@ interface FilterState {
   creativeFormat: string;
   platform: string;
   metaFormat: string;
+  adStatus: string;
 }
 
 interface FilterBarProps {
@@ -55,7 +56,8 @@ export default function FilterBar({
     activeFilters.creativeType ||
     activeFilters.creativeFormat ||
     activeFilters.platform ||
-    activeFilters.metaFormat;
+    activeFilters.metaFormat ||
+    activeFilters.adStatus;
 
   const clearAll = () => {
     setLocalSearch("");
@@ -65,6 +67,7 @@ export default function FilterBar({
       creativeFormat: "",
       platform: "",
       metaFormat: "",
+      adStatus: "",
     });
   };
 
@@ -172,6 +175,17 @@ export default function FilterBar({
                 {m}
               </option>
             ))}
+          </select>
+
+          <select
+            value={activeFilters.adStatus}
+            onChange={(e) => handleSelectChange("adStatus", e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All Status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="NOT_ON_META">Not on Meta</option>
           </select>
         </div>
       </div>

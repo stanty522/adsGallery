@@ -21,6 +21,10 @@ class MemoryCache {
       expiresAt: Date.now() + ttlSeconds * 1000,
     });
   }
+
+  delete(key: string): void {
+    this.store.delete(key);
+  }
 }
 
 export const cache = new MemoryCache();

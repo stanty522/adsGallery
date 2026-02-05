@@ -1,7 +1,22 @@
-import { Creative, FilterOptions, ApiResponse } from "./types";
+import { Creative, FilterOptions, ApiResponse, AdCopy } from "./types";
 import { extractDriveFileId } from "./driveUtils";
 
 const KNOWN_META_FORMATS = ["video", "image", "carousel"];
+
+function parseScriptFromJson(raw: string | undefined): string | null {
+  if (!raw || !raw.trim()) return null;
+  const trimmed = raw.trim();
+
+  // Try to parse as JSON
+  try {
+    const parsed = JSON.parse(trimmed);
+    // Look for common script field names
+    return parsed.script || parsed.Script || parsed.text || null;
+  } catch {
+    // If not valid JSON, return the raw value (might just be plain text)
+    return trimmed;
+  }
+}
 
 function normalizeMetaFormat(
   raw: string | undefined,
@@ -45,6 +60,15 @@ function parseRow(row: string[], index: number): Creative | null {
     return null;
   }
 
+  // Parse ad copy fields (columns P, Q, R = indices 15, 16, 17)
+  // Script from column AF = index 31 (JSON field)
+  const adCopy: AdCopy = {
+    headline: row[15]?.trim() || null,
+    primaryText: row[16]?.trim() || null,
+    description: row[17]?.trim() || null,
+    script: parseScriptFromJson(row[31]),
+  };
+
   return {
     id: index,
     name,
@@ -58,6 +82,7 @@ function parseRow(row: string[], index: number): Creative | null {
     link45,
     link45Static,
     carouselImages,
+    adCopy,
   };
 }
 
@@ -70,7 +95,7 @@ export async function fetchCreatives(): Promise<ApiResponse> {
     throw new Error("Missing GOOGLE_API_KEY or SPREADSHEET_ID env vars");
   }
 
-  const range = encodeURIComponent(`${sheetName}!A2:AD`);
+  const range = encodeURIComponent(`${sheetName}!A2:AF`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
 
   const res = await fetch(url, { cache: "no-store" });

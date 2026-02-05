@@ -125,27 +125,27 @@ body::before {
 }
 
 .badge-type {
-  background: var(--accent-dim);
+  background: #3d3322;
   color: var(--accent);
 }
 
 .badge-platform {
-  background: rgba(91, 141, 239, 0.12);
+  background: #1e2a3d;
   color: #7ba3ef;
 }
 
 .badge-video {
-  background: rgba(91, 141, 239, 0.12);
+  background: #1e2a3d;
   color: var(--video-accent);
 }
 
 .badge-image {
-  background: rgba(109, 212, 160, 0.12);
+  background: #1a3329;
   color: var(--image-accent);
 }
 
 .badge-carousel {
-  background: rgba(212, 126, 212, 0.12);
+  background: #3a2339;
   color: var(--carousel-accent);
 }
 
@@ -183,4 +183,40 @@ select {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+/* Panel slide animations */
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.panel-slide-in {
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+.panel-slide-out {
+  animation: slideOutToRight 0.25s ease-in forwards;
 }

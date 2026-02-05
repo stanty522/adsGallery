@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useCallback } from "react";
 import { Creative } from "@/lib/types";
 import {
   getDriveThumbnailUrl,
   getDriveEmbedUrl,
   getBestVideoId,
 } from "@/lib/driveUtils";
-import VideoPlayer from "./VideoPlayer";
+import CreativeDetailPanel from "./CreativeDetailPanel";
 
 interface CreativeCardProps {
   creative: Creative;
@@ -17,9 +16,8 @@ interface CreativeCardProps {
 
 export default function CreativeCard({ creative, index }: CreativeCardProps) {
   const [imgError, setImgError] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
-  const [showLightbox, setShowLightbox] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
 
   // For videos, use link45Static as thumbnail; for images/carousels, use available images
   const staticThumbId = creative.link45Static;
@@ -31,22 +29,8 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
     : null;
 
   const handleClick = useCallback(() => {
-    if (videoId) {
-      setShowVideo((prev) => !prev);
-    } else if (staticThumbId || imageThumbId) {
-      setShowLightbox(true);
-    }
-  }, [videoId, staticThumbId, imageThumbId]);
-
-  // Close lightbox on Escape key
-  useEffect(() => {
-    if (!showLightbox) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowLightbox(false);
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showLightbox]);
+    setShowDetailPanel(true);
+  }, []);
 
   const formatBadgeClass =
     creative.metaFormat === "video"
@@ -63,8 +47,8 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
       className="card-reveal group relative cursor-pointer"
       style={{ animationDelay: `${staggerDelay}s` }}
       onClick={handleClick}
-      role={videoId ? "button" : undefined}
-      tabIndex={videoId ? 0 : undefined}
+      role="button"
+      tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -74,12 +58,6 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
     >
       {/* Card container - fixed 9:16 aspect ratio */}
       <div className="relative aspect-[9/16] rounded-lg overflow-hidden bg-[#141416] border border-[rgba(255,255,255,0.04)] group-hover:border-[rgba(255,255,255,0.1)] transition-all duration-300">
-        {/* Inline video player - fills same container */}
-        {showVideo && videoId && (
-          <div className="absolute inset-0 z-20 bg-black">
-            <VideoPlayer fileId={videoId} onClose={() => setShowVideo(false)} />
-          </div>
-        )}
         {/* Thumbnail - use static image if available, otherwise video element for videos */}
         {staticThumbId && !imgError ? (
           <>
@@ -176,7 +154,7 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
 
         {/* Top badges */}
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between pointer-events-none">
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap items-center">
             <span className="badge badge-type">{creative.creativeType}</span>
             <span className="badge badge-platform">{creative.platform}</span>
           </div>
@@ -184,38 +162,29 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
             {creative.metaFormat}
           </span>
         </div>
+
+        {/* Meta Ad Status badge - bottom left */}
+        {creative.metaAdStatus && (
+          <div className="absolute bottom-2 left-2 pointer-events-none">
+            {creative.metaAdStatus === "ACTIVE" ? (
+              <span className="badge bg-green-600 text-white font-medium">
+                Active
+              </span>
+            ) : (
+              <span className="badge bg-gray-600 text-white font-medium">
+                Inactive
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Lightbox for images - rendered via portal to body */}
-      {showLightbox && (staticThumbId || imageThumbId) && createPortal(
-        <div
-          className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]"
-          style={{ zIndex: 99999 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowLightbox(false);
-          }}
-        >
-          <button
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowLightbox(false);
-            }}
-          >
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <img
-            src={getDriveThumbnailUrl(staticThumbId || imageThumbId!)}
-            alt={creative.name}
-            className="max-w-[90vw] max-h-[80vh] sm:max-w-[50vw] sm:max-h-[60vh] object-contain rounded-lg animate-[zoomIn_0.25s_ease-out]"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>,
-        document.body
-      )}
+      {/* Detail Panel */}
+      <CreativeDetailPanel
+        creative={creative}
+        isOpen={showDetailPanel}
+        onClose={() => setShowDetailPanel(false)}
+      />
     </div>
   );
 }

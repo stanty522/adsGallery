@@ -20,6 +20,7 @@ interface FilterState {
   creativeFormat: string;
   platform: string;
   metaFormat: string;
+  adStatus: string;
 }
 
 const INITIAL_FILTER_STATE: FilterState = {
@@ -28,6 +29,7 @@ const INITIAL_FILTER_STATE: FilterState = {
   creativeFormat: "",
   platform: "",
   metaFormat: "",
+  adStatus: "",
 };
 
 export default function Gallery() {
@@ -37,12 +39,13 @@ export default function Gallery() {
     useState<FilterState>(INITIAL_FILTER_STATE);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Fetch data on mount
-  useEffect(() => {
-    fetch("/api/creatives")
+  const loadData = useCallback((refresh = false) => {
+    const url = refresh ? "/api/creatives?refresh=true" : "/api/creatives";
+    return fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load");
         return res.json();
@@ -50,13 +53,22 @@ export default function Gallery() {
       .then((data: ApiResponse) => {
         setCreatives(data.creatives);
         setFilters(data.filters);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
       });
   }, []);
+
+  // Fetch data on mount
+  useEffect(() => {
+    loadData()
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [loadData]);
+
+  const handleSync = useCallback(() => {
+    setSyncing(true);
+    loadData(true)
+      .catch((err) => setError(err.message))
+      .finally(() => setSyncing(false));
+  }, [loadData]);
 
   // Filter creatives
   const filtered = useMemo(() => {
@@ -87,6 +99,19 @@ export default function Gallery() {
         c.metaFormat !== activeFilters.metaFormat
       ) {
         return false;
+      }
+      // Ad status filter
+      if (activeFilters.adStatus) {
+        if (activeFilters.adStatus === "ACTIVE" && c.metaAdStatus !== "ACTIVE") {
+          return false;
+        }
+        if (activeFilters.adStatus === "INACTIVE" &&
+            (c.metaAdStatus === "ACTIVE" || !c.metaAdStatus)) {
+          return false;
+        }
+        if (activeFilters.adStatus === "NOT_ON_META" && c.metaAdStatus) {
+          return false;
+        }
       }
       return true;
     });
@@ -175,15 +200,36 @@ export default function Gallery() {
     <div>
       {/* Header */}
       <div className="px-4 md:px-6 pt-8 pb-4">
-        <div className="max-w-[1800px] mx-auto">
-          <h1
-            className="text-lg font-medium tracking-tight text-[#e8e6e3]"
+        <div className="max-w-[1800px] mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-medium tracking-tight text-[#e8e6e3]">
+              Ads Gallery
+            </h1>
+            <p className="text-xs text-[#5a5a5d] mt-1">
+              Browse and filter ad creatives
+            </p>
+          </div>
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#8a8a8d] hover:text-[#e8e6e3] bg-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.06)] rounded-md transition-all duration-200 disabled:opacity-50"
+            title="Sync latest data from sheet"
           >
-            Ads Gallery
-          </h1>
-          <p className="text-xs text-[#5a5a5d] mt-1">
-            Browse and filter ad creatives
-          </p>
+            <svg
+              className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"
+              />
+            </svg>
+            {syncing ? "Syncing" : "Sync"}
+          </button>
         </div>
       </div>
 
