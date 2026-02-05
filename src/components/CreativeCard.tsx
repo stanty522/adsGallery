@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Creative } from "@/lib/types";
 import {
   getDriveThumbnailUrl,
-  getLocalThumbnailUrl,
-  getBestThumbnailId,
+  getDriveEmbedUrl,
   getBestVideoId,
 } from "@/lib/driveUtils";
 import VideoPlayer from "./VideoPlayer";
@@ -16,20 +16,37 @@ interface CreativeCardProps {
 }
 
 export default function CreativeCard({ creative, index }: CreativeCardProps) {
-  const [useFallback, setUseFallback] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  const [showLightbox, setShowLightbox] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
-  const thumbnailId = getBestThumbnailId(creative);
+  // For videos, use link45Static as thumbnail; for images/carousels, use available images
+  const staticThumbId = creative.link45Static;
   const videoId =
     creative.metaFormat === "video" ? getBestVideoId(creative) : null;
+  // For non-videos, use the first available image
+  const imageThumbId = !videoId
+    ? creative.link45Static || creative.carouselImages[0] || null
+    : null;
 
   const handleClick = useCallback(() => {
     if (videoId) {
       setShowVideo((prev) => !prev);
+    } else if (staticThumbId || imageThumbId) {
+      setShowLightbox(true);
     }
-  }, [videoId]);
+  }, [videoId, staticThumbId, imageThumbId]);
+
+  // Close lightbox on Escape key
+  useEffect(() => {
+    if (!showLightbox) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowLightbox(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showLightbox]);
 
   const formatBadgeClass =
     creative.metaFormat === "video"
@@ -63,27 +80,54 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
             <VideoPlayer fileId={videoId} onClose={() => setShowVideo(false)} />
           </div>
         )}
-        {/* Thumbnail */}
-        {thumbnailId && !imgError ? (
+        {/* Thumbnail - use static image if available, otherwise video element for videos */}
+        {staticThumbId && !imgError ? (
           <>
             {!imgLoaded && (
               <div className="absolute inset-0 skeleton" />
             )}
             <img
-              src={useFallback ? getLocalThumbnailUrl(thumbnailId) : getDriveThumbnailUrl(thumbnailId, 400)}
+              src={getDriveThumbnailUrl(staticThumbId)}
               alt={creative.name}
               className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03] ${
                 imgLoaded ? "opacity-100" : "opacity-0"
               }`}
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
-              onError={() => {
-                if (!useFallback) {
-                  setUseFallback(true);
-                } else {
-                  setImgError(true);
-                }
-              }}
+              onError={() => setImgError(true)}
+            />
+          </>
+        ) : imageThumbId && !imgError ? (
+          <>
+            {!imgLoaded && (
+              <div className="absolute inset-0 skeleton" />
+            )}
+            <img
+              src={getDriveThumbnailUrl(imageThumbId)}
+              alt={creative.name}
+              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03] ${
+                imgLoaded ? "opacity-100" : "opacity-0"
+              }`}
+              loading="lazy"
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgError(true)}
+            />
+          </>
+        ) : videoId && !imgError ? (
+          <>
+            {!imgLoaded && (
+              <div className="absolute inset-0 skeleton" />
+            )}
+            <video
+              src={getDriveEmbedUrl(videoId)}
+              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03] ${
+                imgLoaded ? "opacity-100" : "opacity-0"
+              }`}
+              muted
+              playsInline
+              preload="metadata"
+              onLoadedData={() => setImgLoaded(true)}
+              onError={() => setImgError(true)}
             />
           </>
         ) : (
@@ -141,6 +185,37 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
           </span>
         </div>
       </div>
+
+      {/* Lightbox for images - rendered via portal to body */}
+      {showLightbox && (staticThumbId || imageThumbId) && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]"
+          style={{ zIndex: 99999 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowLightbox(false);
+          }}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowLightbox(false);
+            }}
+          >
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <img
+            src={getDriveThumbnailUrl(staticThumbId || imageThumbId!)}
+            alt={creative.name}
+            className="max-w-[90vw] max-h-[80vh] sm:max-w-[50vw] sm:max-h-[60vh] object-contain rounded-lg animate-[zoomIn_0.25s_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
