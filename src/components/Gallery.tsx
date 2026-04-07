@@ -14,6 +14,12 @@ const EMPTY_FILTERS: FilterOptions = {
   metaFormats: [],
 };
 
+interface GalleryProps {
+  /** Optional pre-fetched data from the server component for instant first paint. */
+  initialCreatives?: Creative[];
+  initialFilters?: FilterOptions;
+}
+
 interface FilterState {
   search: string;
   creativeType: string;
@@ -32,13 +38,21 @@ const INITIAL_FILTER_STATE: FilterState = {
   adStatus: "",
 };
 
-export default function Gallery() {
-  const [creatives, setCreatives] = useState<Creative[]>([]);
-  const [filters, setFilters] = useState<FilterOptions>(EMPTY_FILTERS);
+export default function Gallery({
+  initialCreatives,
+  initialFilters,
+}: GalleryProps = {}) {
+  const [creatives, setCreatives] = useState<Creative[]>(
+    initialCreatives ?? []
+  );
+  const [filters, setFilters] = useState<FilterOptions>(
+    initialFilters ?? EMPTY_FILTERS
+  );
   const [activeFilters, setActiveFilters] =
     useState<FilterState>(INITIAL_FILTER_STATE);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  // Skip the loading skeleton when SSR data was provided.
+  const [loading, setLoading] = useState(!initialCreatives);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -56,12 +70,15 @@ export default function Gallery() {
       });
   }, []);
 
-  // Fetch data on mount
+  // If the server component already passed initial data, skip the mount fetch.
+  // Otherwise (e.g. older entry points without SSR data) fall back to the
+  // existing client-side fetch.
   useEffect(() => {
+    if (initialCreatives) return;
     loadData()
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [loadData]);
+  }, [loadData, initialCreatives]);
 
   const handleSync = useCallback(() => {
     setSyncing(true);
