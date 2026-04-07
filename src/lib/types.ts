@@ -41,6 +41,13 @@ export interface Creative {
   metaAdStatus?: MetaAdStatus;
   metaAdId?: string;
   adCopy?: AdCopy;
+  // New fields from Convex meow-ads-library (Phase 4 migration)
+  convexAdId?: string;
+  hypothesisId?: string;
+  parentWinnerId?: string;
+  experimentCycle?: string;
+  experimentVariant?: string;
+  status?: string;
 }
 
 export interface FilterOptions {

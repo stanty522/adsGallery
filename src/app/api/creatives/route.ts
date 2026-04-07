@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cache } from "@/lib/cache";
-import { fetchCreatives } from "@/lib/sheets";
+import { fetchCreatives } from "@/lib/adsLibrary";
 import { ApiResponse, MetaAdStatus } from "@/lib/types";
-import {
-  fetchMetaAds,
-  buildAdStatusMap,
-  matchCreativeToAd,
-} from "@/lib/meta";
 
-const CACHE_KEY = "creatives";
-const META_CACHE_KEY = "meta_ads";
+const CACHE_KEY = "creatives_v2";
+
+// Map convex `status` strings to the gallery's MetaAdStatus enum so the
+// existing UI status badges keep rendering.
+function mapConvexStatus(s: string | undefined): MetaAdStatus {
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower === "live" || lower === "active") return "ACTIVE";
+  if (lower === "paused") return "PAUSED";
+  if (lower === "archived") return "ARCHIVED";
+  if (lower === "deleted") return "DELETED";
+  return null;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,48 +24,20 @@ export async function GET(request: NextRequest) {
 
     if (refresh) {
       cache.delete(CACHE_KEY);
-      cache.delete(META_CACHE_KEY);
     }
 
     let data = cache.get<ApiResponse>(CACHE_KEY);
     if (!data) {
       data = await fetchCreatives();
+      // Promote convex `status` into metaAdStatus so badges still render
+      data = {
+        ...data,
+        creatives: data.creatives.map((c) => ({
+          ...c,
+          metaAdStatus: mapConvexStatus(c.status),
+        })),
+      };
       cache.set(CACHE_KEY, data, ttl);
-    }
-
-    // Fetch Meta ads status and merge with creatives
-    const accessToken = process.env.META_ACCESS_TOKEN;
-    const adAccountId = process.env.META_AD_ACCOUNT_ID;
-
-    if (accessToken && adAccountId) {
-      try {
-        let adStatusMap = cache.get<ReturnType<typeof buildAdStatusMap>>(META_CACHE_KEY);
-
-        if (!adStatusMap) {
-          const metaAds = await fetchMetaAds(accessToken, adAccountId);
-          adStatusMap = buildAdStatusMap(metaAds);
-          cache.set(META_CACHE_KEY, adStatusMap, ttl);
-        }
-
-        // Merge Meta status into creatives
-        data = {
-          ...data,
-          creatives: data.creatives.map((creative) => {
-            const match = matchCreativeToAd(creative.name, adStatusMap!);
-            if (match) {
-              return {
-                ...creative,
-                metaAdStatus: match.status as MetaAdStatus,
-                metaAdId: match.adId,
-              };
-            }
-            return creative;
-          }),
-        };
-      } catch (metaError) {
-        console.error("Failed to fetch Meta ads:", metaError);
-        // Continue without Meta status - don't fail the whole request
-      }
     }
 
     return NextResponse.json(data, {
