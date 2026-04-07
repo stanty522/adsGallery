@@ -19,7 +19,9 @@ function mapConvexStatus(s: string | undefined): MetaAdStatus {
 
 export async function GET(request: NextRequest) {
   try {
-    const ttl = parseInt(process.env.CACHE_TTL_SECONDS || "300", 10);
+    // Default 1 hour. Data only changes when sync runs or we push, so a
+    // longer cache is fine and dramatically improves first-paint speed.
+    const ttl = parseInt(process.env.CACHE_TTL_SECONDS || "3600", 10);
     const refresh = request.nextUrl.searchParams.get("refresh") === "true";
 
     if (refresh) {

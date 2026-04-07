@@ -91,16 +91,50 @@ function CampaignMetricsGroup({ campaign }: { campaign: CampaignMetrics }) {
   );
 }
 
+interface LazyDetail {
+  adCopy: {
+    headline: string | null;
+    primaryText: string | null;
+    description: string | null;
+    script: string | null;
+  };
+  aiActor: string;
+  cameraAngle: string;
+}
+
 export default function CreativeDetailPanel({
   creative,
   isOpen,
   onClose,
 }: CreativeDetailPanelProps) {
   const [isClosing, setIsClosing] = useState(false);
+  const [lazyDetail, setLazyDetail] = useState<LazyDetail | null>(null);
   const videoId =
     creative.metaFormat === "video" ? getBestVideoId(creative) : null;
   const imageId = creative.link45Static || creative.carouselImages[0] || null;
   const isVideo = creative.metaFormat === "video";
+
+  // Detail-only fields (adCopy, aiActor, cameraAngle) are lazy-loaded when
+  // the panel opens to keep the gallery list response small.
+  useEffect(() => {
+    if (!isOpen || !creative.convexAdId) return;
+    let cancelled = false;
+    setLazyDetail(null);
+    fetch(`/api/creatives/${creative.convexAdId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && !data.error) setLazyDetail(data);
+      })
+      .catch(() => {
+        /* graceful no-op */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, creative.convexAdId]);
+
+  // Merge lazy-loaded adCopy back onto the creative for downstream rendering.
+  const adCopy = lazyDetail?.adCopy ?? creative.adCopy;
 
   const {
     metrics,
@@ -144,10 +178,10 @@ export default function CreativeDetailPanel({
   if (!isOpen) return null;
 
   const hasAdCopy =
-    creative.adCopy?.headline ||
-    creative.adCopy?.primaryText ||
-    creative.adCopy?.description ||
-    (isVideo && creative.adCopy?.script);
+    adCopy?.headline ||
+    adCopy?.primaryText ||
+    adCopy?.description ||
+    (isVideo && adCopy?.script);
 
   return createPortal(
     <div
@@ -298,25 +332,29 @@ export default function CreativeDetailPanel({
             <div className="bg-[#141416] rounded-lg p-4 border border-[rgba(255,255,255,0.04)]">
               {hasAdCopy ? (
                 <>
-                  {creative.adCopy?.headline && (
-                    <CopyBlock label="Headline" text={creative.adCopy.headline} />
+                  {adCopy?.headline && (
+                    <CopyBlock label="Headline" text={adCopy.headline} />
                   )}
-                  {creative.adCopy?.primaryText && (
+                  {adCopy?.primaryText && (
                     <CopyBlock
                       label="Primary Text"
-                      text={creative.adCopy.primaryText}
+                      text={adCopy.primaryText}
                     />
                   )}
-                  {creative.adCopy?.description && (
+                  {adCopy?.description && (
                     <CopyBlock
                       label="Description"
-                      text={creative.adCopy.description}
+                      text={adCopy.description}
                     />
                   )}
-                  {isVideo && creative.adCopy?.script && (
-                    <CopyBlock label="Script" text={creative.adCopy.script} />
+                  {isVideo && adCopy?.script && (
+                    <CopyBlock label="Script" text={adCopy.script} />
                   )}
                 </>
+              ) : lazyDetail === null ? (
+                <div className="text-center py-4 text-[#6a6a6d] text-xs">
+                  Loading copy…
+                </div>
               ) : (
                 <div className="text-center py-4 text-[#6a6a6d] text-xs">
                   No copy data available
