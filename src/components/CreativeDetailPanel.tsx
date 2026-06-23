@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Creative, CampaignMetrics } from "@/lib/types";
 import { getDriveThumbnailUrl, getBestVideoId } from "@/lib/driveUtils";
 import { useCreativeMetrics } from "@/hooks/useCreativeMetrics";
+import { useCreativeInsight } from "@/hooks/useCreativeInsight";
 import VideoPlayer from "./VideoPlayer";
 
 interface CreativeDetailPanelProps {
@@ -142,6 +143,12 @@ export default function CreativeDetailPanel({
     error: metricsError,
     refresh,
   } = useCreativeMetrics(creative.name, isOpen);
+
+  const {
+    insight,
+    enabled: insightEnabled,
+    loading: insightLoading,
+  } = useCreativeInsight(creative.convexAdId, isOpen);
 
   const handleClose = useCallback(() => {
     setIsClosing(true);
@@ -323,6 +330,49 @@ export default function CreativeDetailPanel({
               </div>
             )}
           </div>
+
+          {/* AI Insights Section — only shown when the service is configured */}
+          {insightEnabled && (
+            <div className="px-4 pb-4">
+              <h3 className="text-xs text-[#8a8a8d] uppercase tracking-wider font-mono mb-3 flex items-center gap-1.5">
+                <svg
+                  className="w-3.5 h-3.5 text-[#d4a853]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.456-2.456L14.25 6l1.035-.259a3.375 3.375 0 002.456-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
+                  />
+                </svg>
+                AI Analysis
+              </h3>
+              <div className="bg-[#141416] rounded-lg p-4 border border-[rgba(255,255,255,0.04)]">
+                {insightLoading ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-[#6a6a6d] mb-1">
+                      <div className="w-1 h-1 rounded-full bg-[#d4a853] animate-pulse" />
+                      <span>Analyzing creative… (~20s)</span>
+                    </div>
+                    <div className="h-3 skeleton rounded w-full" />
+                    <div className="h-3 skeleton rounded w-[92%]" />
+                    <div className="h-3 skeleton rounded w-[78%]" />
+                  </div>
+                ) : insight ? (
+                  <p className="text-sm text-[#d8d6d3] leading-relaxed">
+                    {insight}
+                  </p>
+                ) : (
+                  <div className="text-center py-2 text-[#6a6a6d] text-xs">
+                    No analysis available
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Ad Copy Section */}
           <div className="px-4 pb-6">

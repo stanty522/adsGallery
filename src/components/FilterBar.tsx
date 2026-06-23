@@ -10,6 +10,8 @@ interface FilterState {
   platform: string;
   metaFormat: string;
   adStatus: string;
+  generation: string;
+  campaignType: string;
 }
 
 interface FilterBarProps {
@@ -57,7 +59,9 @@ export default function FilterBar({
     activeFilters.creativeFormat ||
     activeFilters.platform ||
     activeFilters.metaFormat ||
-    activeFilters.adStatus;
+    activeFilters.adStatus ||
+    activeFilters.generation ||
+    activeFilters.campaignType;
 
   const clearAll = () => {
     setLocalSearch("");
@@ -68,6 +72,8 @@ export default function FilterBar({
       platform: "",
       metaFormat: "",
       adStatus: "",
+      generation: "",
+      campaignType: "",
     });
   };
 
@@ -124,6 +130,20 @@ export default function FilterBar({
         {/* Filter row */}
         <div className="flex flex-wrap gap-2">
           <select
+            value={activeFilters.generation}
+            onChange={(e) => handleSelectChange("generation", e.target.value)}
+            className={selectClass}
+            title="Filter by ad generation (experiment cycle)"
+          >
+            <option value="">All Generations</option>
+            {filters.generations.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+
+          <select
             value={activeFilters.creativeType}
             onChange={(e) => handleSelectChange("creativeType", e.target.value)}
             className={selectClass}
@@ -175,6 +195,17 @@ export default function FilterBar({
                 {m}
               </option>
             ))}
+          </select>
+
+          <select
+            value={activeFilters.campaignType}
+            onChange={(e) => handleSelectChange("campaignType", e.target.value)}
+            className={selectClass}
+            title="Filter by campaign objective"
+          >
+            <option value="">All Campaigns</option>
+            <option value="lead">Lead Gen</option>
+            <option value="purchase">Purchase</option>
           </select>
 
           <select

@@ -1,6 +1,6 @@
 "use client";
 
-import { getDriveEmbedUrl } from "@/lib/driveUtils";
+import { getDriveEmbedUrl, getVideoPosterUrl } from "@/lib/driveUtils";
 
 interface VideoPlayerProps {
   fileId: string;
@@ -8,14 +8,20 @@ interface VideoPlayerProps {
 }
 
 export default function VideoPlayer({ fileId, onClose }: VideoPlayerProps) {
+  // Show a poster frame immediately so the panel isn't blank while the (large,
+  // non-faststart) mp4 buffers. The poster comes from Google Drive's thumbnail
+  // endpoint for Drive-hosted videos; fal.ai videos have none (null → no poster).
+  const poster = getVideoPosterUrl(fileId, 720) ?? undefined;
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">
       <video
         src={getDriveEmbedUrl(fileId)}
+        poster={poster}
         className="w-full h-full object-contain"
         autoPlay
         controls
         playsInline
+        preload="auto"
       />
       {onClose && (
         <button

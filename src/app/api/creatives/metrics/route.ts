@@ -2,11 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 import { cache } from "@/lib/cache";
 import { CreativeMetrics, CampaignMetrics } from "@/lib/types";
 import { findConvexAdIdByName } from "@/lib/adsLibrary";
+import { getMetaIdByName } from "@/lib/metaIdMap";
+import { fetchAdInsights, aggregateByObjective } from "@/lib/meta";
 import adsLibraryClient from "@/lib/convexClient";
 import { anyApi } from "convex/server";
 
 const METRICS_CACHE_PREFIX = "snapshot_metrics_";
 const METRICS_TTL = 600; // 10 minutes; snapshots refresh hourly server-side
+
+/**
+ * Fetch live performance straight from the Meta Graph API for a single ad id.
+ * Returns null when Meta isn't configured, the ad has no insights, or the
+ * call fails — callers then fall back to the Convex snapshot.
+ */
+async function fetchLiveMetaMetrics(
+  metaAdId: string
+): Promise<CreativeMetrics | null> {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) return null;
+  try {
+    const insights = await fetchAdInsights(token, [metaAdId]);
+    const campaigns = aggregateByObjective(insights);
+    if (campaigns.length === 0) return null;
+    const totalSpent = campaigns.reduce((sum, c) => sum + c.spent, 0);
+    return {
+      lastUpdated: new Date().toISOString(),
+      campaigns,
+      totalSpent,
+    };
+  } catch (err) {
+    console.warn("[metrics] live Meta fetch failed:", err);
+    return null;
+  }
+}
 
 interface ConvexSnapshot {
   _id: string;
@@ -78,6 +106,22 @@ export async function GET(request: NextRequest) {
 
   try {
     const found = await findConvexAdIdByName(creativeName);
+
+    // Resolve a Meta ad id: prefer the Convex row, else the upload-tracker
+    // sheet (covers ~94% of ads that have no meta_ad_id in Convex).
+    const metaAdId =
+      found?.metaAdId || (await getMetaIdByName(creativeName)) || null;
+
+    // Primary source: live Meta Graph performance for the resolved ad id.
+    if (metaAdId) {
+      const live = await fetchLiveMetaMetrics(metaAdId);
+      if (live) {
+        cache.set(cacheKey, live, METRICS_TTL);
+        return NextResponse.json(live);
+      }
+    }
+
+    // Fallback: the Convex performance snapshot (only exists for linked ads).
     if (!found) {
       const empty: CreativeMetrics = {
         lastUpdated: new Date().toISOString(),
@@ -88,9 +132,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(empty);
     }
 
-    // NOTE: snapshots:getLatestSnapshot is being added by a parallel subagent
-    // (Phase 4 cron). If it doesn't exist yet at runtime, we catch and
-    // return an empty metrics payload so the UI degrades gracefully.
     let snap: ConvexSnapshot | null = null;
     try {
       snap = (await adsLibraryClient.query(
@@ -99,7 +140,7 @@ export async function GET(request: NextRequest) {
       )) as ConvexSnapshot | null;
     } catch (err) {
       console.warn(
-        "[metrics] snapshots.getLatestSnapshot failed (cron not deployed yet?)",
+        "[metrics] snapshots.getLatestSnapshot failed",
         err
       );
     }

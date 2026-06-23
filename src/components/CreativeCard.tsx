@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Creative } from "@/lib/types";
 import {
   getDriveThumbnailUrl,
+  getVideoPosterUrl,
   getDriveEmbedUrl,
   getBestVideoId,
 } from "@/lib/driveUtils";
@@ -18,15 +19,40 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
 
-  // For videos, use link45Static as thumbnail; for images/carousels, use available images
-  const staticThumbId = creative.link45Static;
   const videoId =
     creative.metaFormat === "video" ? getBestVideoId(creative) : null;
-  // For non-videos, use the first available image
-  const imageThumbId = !videoId
-    ? creative.link45Static || creative.carouselImages[0] || null
-    : null;
+
+  // Poster source for the card. Prefer a real static image (served fast from
+  // the R2 CDN), otherwise pull a single poster frame for Drive-hosted videos.
+  // fal.ai videos are full URLs with no still-frame source, so posterUrl is
+  // null for them and we fall back to a viewport-gated <video> below.
+  const staticImageRef =
+    creative.link45Static ||
+    (videoId ? null : creative.carouselImages[0] || null);
+  const posterUrl = staticImageRef
+    ? getDriveThumbnailUrl(staticImageRef)
+    : getVideoPosterUrl(videoId);
+
+  // Only the fal.ai-hosted videos (no poster frame available) need a real
+  // <video> to show a thumbnail. Mount it solely while the card is near the
+  // viewport so at most a handful exist at once — mounting all ~785 is what
+  // made the gallery a memory hog. content-visibility doesn't gate media
+  // loading, so we gate it ourselves with an observer.
+  const needsVideoFallback = !posterUrl && !!videoId;
+  useEffect(() => {
+    if (!needsVideoFallback) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { rootMargin: "600px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [needsVideoFallback]);
 
   const handleClick = useCallback(() => {
     setShowDetailPanel(true);
@@ -44,7 +70,8 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
 
   return (
     <div
-      className="card-reveal group relative cursor-pointer"
+      ref={cardRef}
+      className="card-reveal card-cv group relative cursor-pointer"
       style={{ animationDelay: `${staggerDelay}s` }}
       onClick={handleClick}
       role="button"
@@ -57,47 +84,38 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
       }}
     >
       {/* Card container - fixed 9:16 aspect ratio */}
-      <div className="relative aspect-[9/16] rounded-lg overflow-hidden bg-[#141416] border border-[rgba(255,255,255,0.04)] group-hover:border-[rgba(255,255,255,0.1)] transition-all duration-300">
-        {/* Thumbnail - use static image if available, otherwise video element for videos */}
-        {staticThumbId && !imgError ? (
+      <div
+        className={`relative aspect-[9/16] rounded-lg overflow-hidden bg-[#141416] border transition-all duration-300 ${
+          creative.isWinner
+            ? "border-green-500/50 ring-2 ring-green-500/60"
+            : "border-[rgba(255,255,255,0.04)] group-hover:border-[rgba(255,255,255,0.1)]"
+        }`}
+      >
+        {/* Thumbnail - always a poster image, never a <video> element */}
+        {posterUrl && !imgError ? (
           <>
             {!imgLoaded && (
               <div className="absolute inset-0 skeleton" />
             )}
             <img
-              src={getDriveThumbnailUrl(staticThumbId)}
+              src={posterUrl}
               alt={creative.name}
               className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03] ${
                 imgLoaded ? "opacity-100" : "opacity-0"
               }`}
               loading="lazy"
+              decoding="async"
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
             />
           </>
-        ) : imageThumbId && !imgError ? (
+        ) : needsVideoFallback && inView && !imgError ? (
+          /* fal.ai video with no poster frame: render a muted, metadata-only
+             <video> just while near the viewport to show a thumbnail. */
           <>
-            {!imgLoaded && (
-              <div className="absolute inset-0 skeleton" />
-            )}
-            <img
-              src={getDriveThumbnailUrl(imageThumbId)}
-              alt={creative.name}
-              className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03] ${
-                imgLoaded ? "opacity-100" : "opacity-0"
-              }`}
-              loading="lazy"
-              onLoad={() => setImgLoaded(true)}
-              onError={() => setImgError(true)}
-            />
-          </>
-        ) : videoId && !imgError ? (
-          <>
-            {!imgLoaded && (
-              <div className="absolute inset-0 skeleton" />
-            )}
+            {!imgLoaded && <div className="absolute inset-0 skeleton" />}
             <video
-              src={getDriveEmbedUrl(videoId)}
+              src={getDriveEmbedUrl(videoId!)}
               className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03] ${
                 imgLoaded ? "opacity-100" : "opacity-0"
               }`}
@@ -175,6 +193,22 @@ export default function CreativeCard({ creative, index }: CreativeCardProps) {
                 Inactive
               </span>
             )}
+          </div>
+        )}
+
+        {/* Winner badge - bottom right (lead CPL ≤ $5 / purchase CPP ≤ $150) */}
+        {creative.isWinner && (
+          <div className="absolute bottom-2 right-2 pointer-events-none">
+            <span className="badge bg-green-500 text-black font-semibold flex items-center gap-0.5">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.287 3.957c.3.922-.755 1.688-1.54 1.118l-3.366-2.446a1 1 0 00-1.176 0l-3.366 2.446c-.784.57-1.838-.196-1.539-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.342 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69l1.287-3.957z" />
+              </svg>
+              {creative.costPerResult != null
+                ? `$${creative.costPerResult.toFixed(0)} ${
+                    creative.campaignType === "purchase" ? "CPP" : "CPL"
+                  }`
+                : "Winner"}
+            </span>
           </div>
         )}
       </div>

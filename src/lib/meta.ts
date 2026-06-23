@@ -168,31 +168,33 @@ export async function fetchAdInsights(
     batches.push(adIds.slice(i, i + 50));
   }
 
-  const allInsights: MetaAdInsight[] = [];
+  // Run the batches concurrently — sequentially this is ~1.3s/batch (≈20s for
+  // the whole library), which is far too slow to sit in the SSR render path.
+  const perBatch = await Promise.all(
+    batches.map(async (batch) => {
+      const batchRequests = batch.map((adId) => ({
+        method: "GET",
+        relative_url: `${adId}?fields=id,name,campaign{id,name,objective},insights.date_preset(maximum){spend,impressions,clicks,actions}`,
+      }));
 
-  for (const batch of batches) {
-    const batchRequests = batch.map((adId) => ({
-      method: "GET",
-      relative_url: `${adId}?fields=id,name,campaign{id,name,objective},insights.date_preset(maximum){spend,impressions,clicks,actions}`,
-    }));
+      const response = await fetch(
+        `${META_BASE_URL}/?access_token=${accessToken}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batch: batchRequests }),
+        }
+      );
 
-    const response = await fetch(
-      `${META_BASE_URL}/?access_token=${accessToken}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batch: batchRequests }),
-      }
-    );
+      const results = await response.json();
+      if (!Array.isArray(results)) return [] as MetaAdInsight[];
 
-    const results = await response.json();
-
-    for (const result of results) {
-      if (result.code === 200) {
+      const out: MetaAdInsight[] = [];
+      for (const result of results) {
+        if (result.code !== 200) continue;
         const data = JSON.parse(result.body);
         const insight = data.insights?.data?.[0];
-
-        allInsights.push({
+        out.push({
           adId: data.id,
           adName: data.name,
           campaignId: data.campaign?.id || "",
@@ -204,17 +206,67 @@ export async function fetchAdInsights(
           actions: insight?.actions || [],
         });
       }
-    }
-  }
+      return out;
+    })
+  );
 
-  return allInsights;
+  return perBatch.flat();
 }
 
-// Map Meta objectives to our simplified types
+export interface AdInsightSummary {
+  campaignType: "lead" | "purchase" | "other";
+  spend: number;
+  results: number;
+  costPerResult: number;
+}
+
+/**
+ * Reduce a single ad's Meta insight to the campaign type and its headline
+ * cost metric (CPL for lead campaigns, CPP for purchase campaigns). Used to
+ * derive the gallery's campaign-type filter and winner badges.
+ */
+// Pick the result count for an objective from Meta's `actions` array. Meta
+// returns several overlapping action types (e.g. "purchase",
+// "offsite_conversion.fct.purchase", "omni_purchase"); prefer the exact base
+// type, else the largest matching value, to avoid double-counting.
+function countResults(
+  actions: { action_type: string; value: string }[],
+  keyword: "lead" | "purchase"
+): number {
+  const exact = actions.find((a) => a.action_type === keyword);
+  if (exact) return parseInt(exact.value || "0", 10);
+  let best = 0;
+  for (const a of actions) {
+    if (a.action_type.includes(keyword)) {
+      best = Math.max(best, parseInt(a.value || "0", 10));
+    }
+  }
+  return best;
+}
+
+export function adInsightSummary(insight: MetaAdInsight): AdInsightSummary {
+  const campaignType = getObjectiveType(insight.objective);
+  const results =
+    campaignType === "purchase"
+      ? countResults(insight.actions, "purchase")
+      : campaignType === "lead"
+        ? countResults(insight.actions, "lead")
+        : 0;
+  return {
+    campaignType,
+    spend: insight.spend,
+    results,
+    costPerResult: results > 0 ? insight.spend / results : 0,
+  };
+}
+
+// Map Meta objectives to our simplified types. Covers both the legacy names
+// and the current ODAX objectives (OUTCOME_LEADS / OUTCOME_SALES).
 function getObjectiveType(objective: string): "lead" | "purchase" | "other" {
   const upper = objective.toUpperCase();
   if (upper.includes("LEAD")) return "lead";
   if (
+    upper.includes("SALES") ||
     upper.includes("PURCHASE") ||
     upper.includes("CONVERSIONS") ||
     upper.includes("PRODUCT_CATALOG_SALES")

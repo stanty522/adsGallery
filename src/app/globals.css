@@ -104,6 +104,18 @@ body::before {
   animation: cardReveal 0.4s ease-out both;
 }
 
+/*
+ * Let the browser skip rendering, layout and image decode for cards that are
+ * scrolled out of view. With ~785 cards in the DOM this is what keeps memory
+ * flat instead of decoding every poster at once. contain-intrinsic-size gives
+ * offscreen cards a placeholder height (the `auto` keyword remembers the real
+ * size after first paint) so the scrollbar stays stable.
+ */
+.card-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+
 /* Filter bar glass effect */
 .filter-glass {
   background: var(--glass-bg);

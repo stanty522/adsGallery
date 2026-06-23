@@ -48,6 +48,14 @@ export interface Creative {
   experimentCycle?: string;
   experimentVariant?: string;
   status?: string;
+  // Generation bucket for the gallery filter: the ad's experiment_cycle
+  // (e.g. "e12") when present, else a created_at month bucket (e.g. "Apr 2026").
+  generation?: string;
+  // Grid-level Meta performance, baked into the slim list for filtering/badges.
+  campaignType?: "lead" | "purchase" | "other";
+  costPerResult?: number; // CPL for lead campaigns, CPP for purchase campaigns
+  results?: number;
+  isWinner?: boolean; // lead CPL ≤ $5, or purchase CPP ≤ $150
 }
 
 export interface FilterOptions {
@@ -55,6 +63,7 @@ export interface FilterOptions {
   creativeFormats: string[];
   platforms: string[];
   metaFormats: string[];
+  generations: string[];
 }
 
 export interface ApiResponse {

@@ -12,6 +12,7 @@ const EMPTY_FILTERS: FilterOptions = {
   creativeFormats: [],
   platforms: [],
   metaFormats: [],
+  generations: [],
 };
 
 interface GalleryProps {
@@ -27,6 +28,8 @@ interface FilterState {
   platform: string;
   metaFormat: string;
   adStatus: string;
+  generation: string;
+  campaignType: string;
 }
 
 const INITIAL_FILTER_STATE: FilterState = {
@@ -36,6 +39,8 @@ const INITIAL_FILTER_STATE: FilterState = {
   platform: "",
   metaFormat: "",
   adStatus: "",
+  generation: "",
+  campaignType: "",
 };
 
 export default function Gallery({
@@ -114,6 +119,18 @@ export default function Gallery({
       if (
         activeFilters.metaFormat &&
         c.metaFormat !== activeFilters.metaFormat
+      ) {
+        return false;
+      }
+      if (
+        activeFilters.generation &&
+        c.generation !== activeFilters.generation
+      ) {
+        return false;
+      }
+      if (
+        activeFilters.campaignType &&
+        c.campaignType !== activeFilters.campaignType
       ) {
         return false;
       }

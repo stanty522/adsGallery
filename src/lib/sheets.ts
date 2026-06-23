@@ -131,6 +131,7 @@ export async function fetchCreatives(): Promise<ApiResponse> {
     creativeFormats: Array.from(formatsSet).sort(),
     platforms: Array.from(platformsSet).sort(),
     metaFormats: Array.from(metaFormatsSet).sort(),
+    generations: [], // legacy sheets path predates generation buckets
   };
 
   return { creatives, filters };

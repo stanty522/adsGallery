@@ -45,6 +45,25 @@ export function getDriveEmbedUrl(fileIdOrUrl: string): string {
   return `${CDN_URL}/videos/${fileIdOrUrl}.mp4`;
 }
 
+/**
+ * Poster frame for a video card. The R2 `thumbs/` bucket only holds stills
+ * for *image* assets, not video frames, so for Drive-hosted videos we pull a
+ * poster from Google Drive's thumbnail endpoint (served via the lh3 CDN).
+ * fal.ai-hosted videos are bare full URLs with no still-frame source, so we
+ * return null and the caller falls back to a placeholder.
+ *
+ * Cards must use this instead of mounting a <video> element — rendering
+ * hundreds of decoding <video> tags is what makes the gallery a memory hog.
+ */
+export function getVideoPosterUrl(
+  videoRef: string | null | undefined,
+  size = 640
+): string | null {
+  if (!videoRef) return null;
+  if (isFullUrl(videoRef)) return null;
+  return `https://drive.google.com/thumbnail?id=${videoRef}&sz=w${size}`;
+}
+
 export function getBestThumbnailId(creative: {
   link916: string | null;
   link45: string | null;
